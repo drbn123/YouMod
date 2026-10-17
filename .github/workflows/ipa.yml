@@ -128,8 +128,14 @@ jobs:
         if: ${{ !startsWith(inputs.ipa_url, 'https://mega.nz/') }}
         env:
           IPA_URL: ${{ inputs.ipa_url }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          wget "$IPA_URL" --quiet --no-verbose -O youtube.ipa
+          # Assets of a draft release in this repo need the token to download
+          if [[ "$IPA_URL" == "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/assets/"* ]]; then
+            curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" "$IPA_URL" -o youtube.ipa
+          else
+            wget "$IPA_URL" --quiet --no-verbose -O youtube.ipa
+          fi
 
       - name: Validate IPA
         run: |
