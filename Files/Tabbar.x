@@ -74,7 +74,15 @@ static NSInteger ymIconTypeForTabID(NSString *tabID) {
     if ([tabID isEqualToString:@"minigame"]) return 15;
     if ([tabID isEqualToString:@"fashion"]) return 16;
     if ([tabID isEqualToString:@"learning"]) return 17;
+    // Native YouTube icon types, used when YouTube leaves the tab out of its pivot bar
+    if ([tabID isEqualToString:@"home"]) return 65;
+    if ([tabID isEqualToString:@"subscriptions"]) return 66;
+    if ([tabID isEqualToString:@"library"]) return 61;
     return 0;
+}
+
+static BOOL ymPrefersPolish(void) {
+    return [[NSLocale preferredLanguages].firstObject hasPrefix:@"pl"];
 }
 
 static NSString *ymTitleForTabID(NSString *tabID) {
@@ -95,6 +103,9 @@ static NSString *ymTitleForTabID(NSString *tabID) {
     if ([tabID isEqualToString:@"minigame"]) return LOC(@"MINIGAME_TAB");
     if ([tabID isEqualToString:@"fashion"]) return LOC(@"FASHION_TAB");
     if ([tabID isEqualToString:@"learning"]) return LOC(@"LEARNING_TAB");
+    if ([tabID isEqualToString:@"home"]) return ymPrefersPolish() ? @"Główna" : @"Home";
+    if ([tabID isEqualToString:@"subscriptions"]) return ymPrefersPolish() ? @"Subskrypcje" : @"Subscriptions";
+    if ([tabID isEqualToString:@"library"]) return ymPrefersPolish() ? @"Ty" : @"You";
     return nil;
 }
 
