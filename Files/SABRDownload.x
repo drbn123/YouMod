@@ -253,6 +253,34 @@ static YMSABRFormat *SABRParseFormatId(NSData *fmt) {
 // formats, not versions). We prefer the xtags variant because that's what the app
 // itself selects (our capture played 251 with xtags), and we copy {itag,
 // lastModified, xtags} as one consistent triple so server-side matching lines up.
+// Dubbed audio tracks (incl. YouTube's auto-dubs) share the original's itag and
+// differ only by xtags (acont=original / dubbed-auto, lang=..). Rank variants so the
+// original track wins, then other tagged variants (e.g. drc), then the plain entry.
+static BOOL SABRRawContains(NSData *data, const char *needle) {
+    if (data.length == 0) return NO;
+    NSData *n = [NSData dataWithBytes:needle length:strlen(needle)];
+    return [data rangeOfData:n options:0 range:NSMakeRange(0, data.length)].location != NSNotFound;
+}
+
+// xtags usually arrives as base64url text wrapping a key/value protobuf; check both
+// the raw bytes and the decoded payload.
+static BOOL SABRDataContains(NSData *data, const char *needle) {
+    if (SABRRawContains(data, needle)) return YES;
+    NSString *s = [[NSString alloc] initWithData:data encoding:NSASCIIStringEncoding];
+    if (s.length == 0) return NO;
+    s = [[s stringByReplacingOccurrencesOfString:@"-" withString:@"+"] stringByReplacingOccurrencesOfString:@"_" withString:@"/"];
+    while (s.length % 4) s = [s stringByAppendingString:@"="];
+    NSData *decoded = [[NSData alloc] initWithBase64EncodedString:s options:NSDataBase64DecodingIgnoreUnknownCharacters];
+    return SABRRawContains(decoded, needle);
+}
+
+static int SABRFormatRank(YMSABRFormat *fmt) {
+    if (fmt.xtags.length == 0) return 1;
+    if (SABRDataContains(fmt.xtags, "original")) return 3;
+    if (SABRDataContains(fmt.xtags, "dubbed") || SABRDataContains(fmt.xtags, "descriptive")) return 0;
+    return 2;
+}
+
 static YMSABRFormat *SABRResolveFormat(NSData *body, uint64_t itag) {
     YMSABRFormat *result = [YMSABRFormat new];
     SABRIterateTopLevel(body, ^BOOL(uint64_t f5, int w5, NSUInteger fs, NSUInteger fe, NSUInteger ps5, NSUInteger pl5) {
@@ -265,8 +293,8 @@ static YMSABRFormat *SABRResolveFormat(NSData *body, uint64_t itag) {
                 if (f6 != kSABRAvailList || w6 != kProtoWireLengthDelimited) return YES;
                 YMSABRFormat *fmt = SABRParseFormatId([inner subdataWithRange:NSMakeRange(ps6, pl6)]);
                 if (fmt.itag == itag) {
-                    // Keep the first match, but upgrade to an entry that carries xtags.
-                    if (!result.found || (result.xtags.length == 0 && fmt.xtags.length > 0)) {
+                    // Keep the first match, but upgrade to a better-ranked variant.
+                    if (!result.found || SABRFormatRank(fmt) > SABRFormatRank(result)) {
                         result.itag = fmt.itag; result.lastModified = fmt.lastModified;
                         result.xtags = fmt.xtags; result.found = YES;
                     }
